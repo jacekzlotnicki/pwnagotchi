@@ -31,6 +31,17 @@ class UPS:
         self._bus = smbus.SMBus(1)
         # Version v1.1 and v1.2
         self.address = 0x36
+        self.voltage_register = 0x02
+        self.capacity_register = 0x04
+        
+        if subprocess.run(['i2cget', '-y', '1', '0x32']).returncode == 0:
+            # Version v1.2 fake
+            self.address = 0X32
+            self.voltage_register = 0x01
+            self.capacity_register = 0x04
+            self._bus.write_word_data(self.address, 0xfe, 0x0054)
+            self._bus.write_word_data(self.address, 0x06, 0x4000)
+
         if subprocess.run(['i2cget', '-y', '1', '0x62']).returncode == 0:
             # Version v1.3
             self.address = 0X62
@@ -38,7 +49,7 @@ class UPS:
 
     def voltage(self):
         try:
-            read = self._bus.read_word_data(self.address, 2)
+            read = self._bus.read_word_data(self.address, self.voltage_register)
             swapped = struct.unpack("<H", struct.pack(">H", read))[0]
             return swapped * 1.25 / 1000 / 16
         except:
@@ -46,7 +57,7 @@ class UPS:
 
     def capacity(self):
         try:
-            read = self._bus.read_word_data(self.address, 4)
+            read = self._bus.read_word_data(self.address, self.capacity_register)
             swapped = struct.unpack("<H", struct.pack(">H", read))[0]
             return swapped / 256
         except:
@@ -74,7 +85,7 @@ class UPSLite(plugins.Plugin):
         self.ups = UPS()
 
     def on_ui_setup(self, ui):
-        ui.add_element('ups', LabeledValue(color=BLACK, label='UPS', value='0%/0V', position=(ui.width() / 2 + 15, 0),
+        ui.add_element('ups', LabeledValue(color=BLACK, label='UPS', value='0%/0V', position=(ui.width() / 3 + 5, 0),
                                            label_font=fonts.Bold, text_font=fonts.Medium))
 
     def on_unload(self, ui):
@@ -84,8 +95,10 @@ class UPSLite(plugins.Plugin):
     def on_ui_update(self, ui):
         capacity = self.ups.capacity()
         charging = self.ups.charging()
-        ui.set('ups', "%2i%s" % (capacity, charging))
-        if capacity <= self.options['shutdown']:
-            logging.info('[ups_lite] Empty battery (<= %s%%): shuting down' % self.options['shutdown'])
-            ui.update(force=True, new_data={'status': 'Battery exhausted, bye ...'})
-            pwnagotchi.shutdown()
+        voltage = self.ups.voltage()
+        ui.set('ups', "%sV/%2i [%s]" % (voltage, capacity, charging))
+        if capacity <= self.options['shutdown_at_capacity'] and charging == '-':
+            logging.info('[ups_lite] Empty battery (<= %s%%): shuting down' % self.options['shutdown_at_capacity'])
+            if not self.options['debug']:
+                ui.update(force=True, new_data={'status': 'Battery exhausted, bye ...'})
+                pwnagotchi.shutdown()
