@@ -52,6 +52,9 @@ class Display(View):
     def is_oledhat(self):
         return self._implementation.name == 'oledhat'
 
+    def is_adafruitssd1306i2c(self):
+        return self._implementation.name == 'adafruitssd1306i2c'
+
     def is_lcdhat(self):
         return self._implementation.name == 'lcdhat'
 
@@ -72,7 +75,7 @@ class Display(View):
 
     def is_waveshare213bc(self):
         return self._implementation.name == 'waveshare213bc'
-    
+
     def is_waveshare213inb_v4(self):
         return self._implementation.name == 'waveshare213inb_v4'
 
